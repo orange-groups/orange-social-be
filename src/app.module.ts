@@ -13,9 +13,11 @@ import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MediaModule } from './modules/media/media.module';
 import { DatabaseModule } from './database/database.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProfileModule, FeedModule, PostsModule, CommentsModule, ReactionsModule, FriendsModule, ChatModule, NotificationsModule, MediaModule, DatabaseModule],
+  imports: [AuthModule, UsersModule, ProfileModule, FeedModule, PostsModule, CommentsModule, ReactionsModule, FriendsModule, ChatModule, NotificationsModule, MediaModule, DatabaseModule,
+    ConfigModule.forRoot({isGlobal: true,})],
   controllers: [AppController],
   providers: [AppService],
 })
