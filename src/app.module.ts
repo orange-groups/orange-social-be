@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -15,7 +16,21 @@ import { MediaModule } from './modules/media/media.module';
 import { DatabaseModule } from './database/database.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProfileModule, FeedModule, PostsModule, CommentsModule, ReactionsModule, FriendsModule, ChatModule, NotificationsModule, MediaModule, DatabaseModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    AuthModule,
+    UsersModule,
+    ProfileModule,
+    FeedModule,
+    PostsModule,
+    CommentsModule,
+    ReactionsModule,
+    FriendsModule,
+    ChatModule,
+    NotificationsModule,
+    MediaModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
