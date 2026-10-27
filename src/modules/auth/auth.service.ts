@@ -101,7 +101,7 @@ export class AuthService {
     return bcrypt.hash(digest, BCRYPT_SALT_ROUNDS);
   }
 
-  private async issueTokens(
+  async issueTokens(
     userId: string,
     email: string,
     username: string,
