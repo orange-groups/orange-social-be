@@ -65,3 +65,26 @@ NODE_ENV=development       # production thì cookie có Secure (cần HTTPS)
 npx jest src/modules/auth      # unit test
 npm run test:e2e               # e2e (mock database)
 ```
+# Password recovery
+
+`POST /auth/forgot-password` accepts `{ "email": "..." }` and sends an SMTP
+reset link for registered users. The response is deliberately the same for
+unknown addresses. Requests are limited to one per address per minute.
+
+`POST /auth/reset-password` accepts `{ "token": "...", "newPassword": "..." }`.
+Tokens are random, stored as SHA-256 keys in Upstash Redis, expire after 15
+minutes, and are single-use. Passwords require at least 12 characters and at
+most 72 UTF-8 bytes (bcrypt limit). Reset revokes refresh tokens and increments
+the version checked by access-token authentication. A database write failure
+after consuming a token requires requesting another link.
+
+Set `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM`,
+`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and
+`FRONTEND_URL=http://localhost:5173` in `.env`. Without these settings, recovery
+returns 503; login/registration still work. Use a sender authorized by your SMTP
+provider. Port 465 normally uses `MAIL_SECURE=true`; port 587 uses
+`MAIL_SECURE=false` with required STARTTLS. Both username and password must be
+provided together; omit both only for an SMTP server allowing unauthenticated
+delivery. No Resend API key is required.
+
+This integration does not implement six-digit email verification.

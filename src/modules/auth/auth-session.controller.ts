@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
 
@@ -65,7 +66,9 @@ export class AuthSessionController {
       );
       return this.sendSession(res, session);
     } catch (error) {
-      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, refreshCookieOptions());
+      if (error instanceof UnauthorizedException) {
+        res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, refreshCookieOptions());
+      }
       throw error;
     }
   }

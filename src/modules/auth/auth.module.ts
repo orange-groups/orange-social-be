@@ -9,16 +9,23 @@ import { AuthSessionService } from './auth-session.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TrustedOriginGuard } from './guards/trusted-origin.guard';
 import { UserSessionRepository } from './repositories/user-session.repository';
+import { PasswordRecoveryController } from './password-recovery.controller';
+import { PasswordRecoveryService } from './password-recovery.service';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, JwtModule.register({})],
-  controllers: [AuthController, AuthSessionController],
+  controllers: [
+    AuthController,
+    AuthSessionController,
+    PasswordRecoveryController,
+  ],
   providers: [
     AuthService,
     AuthSessionService,
     UserSessionRepository,
     JwtAuthGuard,
     TrustedOriginGuard,
+    PasswordRecoveryService,
   ],
   // Other modules: import AuthModule, then @UseGuards(JwtAuthGuard)
   exports: [AuthService, AuthSessionService, JwtAuthGuard],
