@@ -71,7 +71,10 @@ describe('HttpExceptionFilter', () => {
     const exception = new BadRequestException(['Invalid email']);
     const response = run(exception);
     expect(response.status).toHaveBeenCalledWith(400);
-    expect(response.json).toHaveBeenCalledWith(exception.getResponse());
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      error: { code: 'BAD_REQUEST', message: exception.message, details: null },
+    });
     expect(errorLog).not.toHaveBeenCalled();
   });
 });
