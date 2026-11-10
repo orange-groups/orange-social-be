@@ -41,9 +41,8 @@ social-network-api/
 │       │   ├── auth.module.ts
 │       │   ├── auth.controller.ts
 │       │   ├── auth.service.ts
-│       │   ├── dto/
-│       │   ├── guards/
-│       │   └── strategies/
+│       │   ├── dto/                # Hợp đồng request/response
+│       │   └── repositories/       # Truy vấn tài khoản và phiên đăng nhập
 │       ├── users/                  # Thông tin tài khoản, tra cứu user
 │       ├── profile/                # Hồ sơ, avatar, giới thiệu
 │       ├── feed/                   # Timeline và chiến lược phân trang
@@ -172,7 +171,7 @@ npx prisma generate
 NODE_ENV=development
 PORT=3000
 API_PREFIX=api/v1
-FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
 JWT_ACCESS_SECRET=replace_with_strong_secret
 JWT_REFRESH_SECRET=replace_with_another_strong_secret

@@ -9,7 +9,7 @@ import type { Request } from 'express';
 import {
   AccessTokenPayload,
   AuthSessionService,
-} from '../auth-session.service';
+} from '../../modules/auth/auth-session.service';
 
 export type AuthenticatedRequest = Request & { user?: AccessTokenPayload };
 

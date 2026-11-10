@@ -21,8 +21,8 @@ import {
 } from './auth.service';
 import type { AuthUserDto } from './dto/register.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { TrustedOriginGuard } from './guards/trusted-origin.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TrustedOriginGuard } from '../../common/guards/trusted-origin.guard';
 
 /** Same cookie as POST /auth/regis sets, so both flows share one session. */
 export function refreshCookieOptions(): CookieOptions {

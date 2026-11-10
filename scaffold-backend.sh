@@ -29,7 +29,7 @@ if [[ ! -f .env.example ]]; then
 NODE_ENV=development
 PORT=3000
 API_PREFIX=api/v1
-FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
 JWT_ACCESS_SECRET=replace_with_strong_secret
 JWT_REFRESH_SECRET=replace_with_another_strong_secret

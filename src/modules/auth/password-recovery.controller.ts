@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { TrustedOriginGuard } from './guards/trusted-origin.guard';
+import { TrustedOriginGuard } from '../../common/guards/trusted-origin.guard';
 import { PasswordRecoveryService } from './password-recovery.service';
 
 @Controller('auth')

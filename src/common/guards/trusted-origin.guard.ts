@@ -13,20 +13,17 @@ import type { Request } from 'express';
  */
 @Injectable()
 export class TrustedOriginGuard implements CanActivate {
-  private readonly allowedOrigins: string[];
+  private readonly allowedOrigin: string;
 
   constructor(configService: ConfigService) {
-    this.allowedOrigins = (
-      configService.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:5173'
-    )
-      .split(',')
-      .map((origin) => origin.trim().replace(/\/$/, ''))
-      .filter(Boolean);
+    this.allowedOrigin = new URL(
+      configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173',
+    ).origin;
   }
 
   canActivate(context: ExecutionContext): boolean {
     const origin = context.switchToHttp().getRequest<Request>().headers.origin;
-    if (origin && !this.allowedOrigins.includes(origin)) {
+    if (origin && origin !== this.allowedOrigin) {
       throw new ForbiddenException('Origin không được phép.');
     }
     return true;
