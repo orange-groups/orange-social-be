@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MediaController } from './media.controller';
+import { MediaService } from './media.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('MediaController', () => {
   let controller: MediaController;
@@ -7,7 +9,11 @@ describe('MediaController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MediaController],
-    }).compile();
+      providers: [MediaService],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<MediaController>(MediaController);
   });
