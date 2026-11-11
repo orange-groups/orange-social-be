@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { DrizzleService } from './../src/database/drizzle.service';
+import { configureHttpApi } from './../src/common/configure-http-api';
 
 interface StoredUser {
   id: string;
@@ -96,13 +97,7 @@ describe('App & Auth Registration (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    configureHttpApi(app);
     await app.init();
     jwtService = moduleFixture.get<JwtService>(JwtService);
   });
@@ -115,7 +110,7 @@ describe('App & Auth Registration (e2e)', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect({ success: true, data: 'Hello World!' });
   });
 
   it('POST /auth/regis — registers user, returns 15m accessToken, sets 1d HttpOnly refresh_token cookie, and stores hashed refresh token', async () => {
@@ -128,15 +123,20 @@ describe('App & Auth Registration (e2e)', () => {
       })
       .expect(201);
 
-    const body = response.body as {
-      accessToken: string;
-      user: {
-        id: string;
-        email: string;
-        username: string;
-        fullName: string;
+    const envelope = response.body as {
+      success: boolean;
+      data: {
+        accessToken: string;
+        user: {
+          id: string;
+          email: string;
+          username: string;
+          fullName: string;
+        };
       };
     };
+    expect(envelope.success).toBe(true);
+    const body = envelope.data;
 
     expect(body.accessToken).toBeDefined();
     expect(body.user).toMatchObject({
@@ -191,7 +191,7 @@ describe('App & Auth Registration (e2e)', () => {
   });
 
   it('POST /auth/regis — returns 400 Bad Request for weak password', async () => {
-    await request(app.getHttpServer())
+    const response = await request(app.getHttpServer())
       .post('/auth/regis')
       .send({
         fullName: 'Ba Dan',
@@ -199,5 +199,24 @@ describe('App & Auth Registration (e2e)', () => {
         password: 'weak',
       })
       .expect(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        details: expect.arrayContaining([
+          expect.objectContaining({ field: 'password' }),
+        ]) as unknown,
+      },
+    });
+  });
+
+  it('formats unknown routes consistently', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/does-not-exist')
+      .expect(404);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: 'NOT_FOUND', details: null },
+    });
   });
 });

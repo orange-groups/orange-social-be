@@ -120,8 +120,9 @@ export class AuthSessionService implements OnModuleInit {
   }
 
   async verifyAccessToken(token: string): Promise<AccessTokenPayload> {
+    let payload: AccessTokenPayload;
     try {
-      return await this.jwtService.verifyAsync<AccessTokenPayload>(token, {
+      payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token, {
         secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
     } catch {
@@ -129,6 +130,12 @@ export class AuthSessionService implements OnModuleInit {
         'Access token không hợp lệ hoặc đã hết hạn.',
       );
     }
+    // Database connectivity failures are not invalid credentials.
+    const user = await this.repository.findById(payload.sub);
+    if (!user || user.tokenVersion !== payload.tokenVersion) {
+      throw new UnauthorizedException(SESSION_EXPIRED);
+    }
+    return payload;
   }
 
   private async verifyRefreshToken(

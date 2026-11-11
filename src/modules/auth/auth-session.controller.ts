@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
 
@@ -20,8 +21,8 @@ import {
 } from './auth.service';
 import type { AuthUserDto } from './dto/register.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { TrustedOriginGuard } from './guards/trusted-origin.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TrustedOriginGuard } from '../../common/guards/trusted-origin.guard';
 
 /** Same cookie as POST /auth/regis sets, so both flows share one session. */
 export function refreshCookieOptions(): CookieOptions {
@@ -65,7 +66,9 @@ export class AuthSessionController {
       );
       return this.sendSession(res, session);
     } catch (error) {
-      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, refreshCookieOptions());
+      if (error instanceof UnauthorizedException) {
+        res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, refreshCookieOptions());
+      }
       throw error;
     }
   }

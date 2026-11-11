@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('NotificationsController', () => {
   let controller: NotificationsController;
@@ -7,7 +9,11 @@ describe('NotificationsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [NotificationsController],
-    }).compile();
+      providers: [NotificationsService],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<NotificationsController>(NotificationsController);
   });

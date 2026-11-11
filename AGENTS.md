@@ -6,6 +6,8 @@
 
 ## 0. Non-negotiable agent workflow
 
+**Required project handoff:** Read [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) and [`docs/API_SKELETON.md`](docs/API_SKELETON.md) before implementing any scaffolded API. The current feature APIs are skeletons, not completed business logic. Implement only the module/task explicitly requested; the guide is not authorization to implement everything.
+
 1. Read this file, `BACKEND_STRUCTURE.md`, nearby module files, and relevant API contracts **before editing**.
 2. Inspect the installed dependencies and `package.json` scripts. Do **not** assume a particular NestJS or Prisma major version, module system, test runner, or ORM integration.
 3. Limit changes to the requested feature. Do not rewrite shared infrastructure, alter DB schema, or modify a separate feature without an explicit need.
