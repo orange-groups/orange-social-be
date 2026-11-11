@@ -1,6 +1,6 @@
 # Backend API skeleton
 
-Khung theo `../IMPLEMENTATION_PLAN.md` tại workspace root. Chưa triển khai nghiệp vụ hoặc persistence.
+Khung chưa triển khai nghiệp vụ hoặc persistence. Hướng dẫn tiếp nối theo từng module nằm tại [modules/README.md](modules/README.md); không phụ thuộc file kế hoạch cục bộ chưa được track.
 
 ## Hiện đã có
 
@@ -61,7 +61,7 @@ Validation nghiệp vụ vẫn chưa có: trim/chuẩn hóa, body patch rỗng, 
 
 ## Kiểm thử
 
-- Unit tests controller được bổ sung provider và override guard trong test cô lập.
+- Các unit spec skeleton trong module chưa triển khai đã được xóa có chủ đích; cần viết tests nghiệp vụ thật khi triển khai. Test auth và các thành phần dùng chung vẫn được giữ.
 - `test/api-skeleton.e2e-spec.ts` boot toàn AppModule, mock database và verifier; guard JWT thực tế vẫn kiểm tra Bearer header. Không kết nối DB/provider ngoài.
 - Test mỗi route với thiếu auth và input hợp lệ trả 501; test DTO/path/query validation, route /me, parsing unreadOnly=false và nullable profile fields.
 - Các test này chỉ chứng minh wiring/contract khung, không chứng minh bảo mật nghiệp vụ hoặc transaction thực tế.

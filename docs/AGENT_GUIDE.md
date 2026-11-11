@@ -11,6 +11,8 @@ Read in order:
 3. `docs/API_SKELETON.md` for the API inventory and placeholder behavior.
 4. Relevant module files, `src/database/schema.ts`, existing tests and auth contracts.
 
+Per-module implementation handoff: see [docs/modules/README.md](modules/README.md) for current status, dependencies, implementation steps and acceptance checks. Unspecified comments/reactions/chat contracts are explicitly proposals, not existing APIs.
+
 The workspace may also contain `PLAN.md` and `IMPLEMENTATION_PLAN.md` one directory above this repository. They describe the broader proposal but are not guaranteed to exist in a standalone clone. This guide and the checked-in skeleton contain the essential handoff; do not depend on files outside the repository to build or test.
 
 **Do not implement every TODO automatically.** The approved work so far is the backend skeleton only. Wait for the user to name the next feature/module and confirm its boundaries. Never treat this guide as approval for new dependencies, DB migrations, infrastructure, commits or pushes.
