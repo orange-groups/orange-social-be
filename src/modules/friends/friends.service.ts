@@ -13,10 +13,13 @@ import type {
   RemovedFriendDto,
 } from './dto/friend-response.dto';
 import type { ListFriendRequestsDto } from './dto/list-friend-requests.dto';
+import { FriendsRepository } from './repositories/friends.repository';
 import type { Relationship } from './types/friends.types';
 
 @Injectable()
 export class FriendsService {
+  constructor(private readonly repository: FriendsRepository) {}
+
   sendRequest(
     _senderId: string,
     _receiverId: string,
@@ -96,7 +99,7 @@ export class FriendsService {
     throw new NotImplementedException('Friendship lookup is not implemented.');
   }
 
-  countFriends(_userId: string): Promise<number> {
-    throw new NotImplementedException('Friend counting is not implemented.');
+  countFriends(userId: string, tx?: DatabaseTransaction): Promise<number> {
+    return this.repository.countFriends(userId, tx);
   }
 }

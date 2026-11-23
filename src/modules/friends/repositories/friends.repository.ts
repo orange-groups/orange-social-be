@@ -1,8 +1,11 @@
 /* eslint @typescript-eslint/no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] -- Skeleton signatures intentionally retain unused parameters. */
 import { Injectable, NotImplementedException } from '@nestjs/common';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import type { CursorPaginationDto } from '../../../common/dto/cursor-pagination.dto';
 import type { Page } from '../../../common/types/page';
 import type { UserSummary } from '../../../common/types/user-summary';
+import { DrizzleService } from '../../../database/drizzle.service';
+import { friendships, users } from '../../../database/schema';
 import type { DatabaseTransaction } from '../../../database/types/transaction';
 import type { ListFriendRequestsDto } from '../dto/list-friend-requests.dto';
 import type {
@@ -13,6 +16,8 @@ import type {
 
 @Injectable()
 export class FriendsRepository {
+  constructor(private readonly drizzle: DrizzleService) {}
+
   lockPair(_tx: DatabaseTransaction, _a: string, _b: string): Promise<void> {
     throw new NotImplementedException(
       'Friend pair locking is not implemented.',
@@ -101,9 +106,15 @@ export class FriendsRepository {
     );
   }
 
-  countFriends(_userId: string): Promise<number> {
-    throw new NotImplementedException(
-      'Friend count queries are not implemented.',
-    );
+  async countFriends(
+    userId: string,
+    tx?: DatabaseTransaction,
+  ): Promise<number> {
+    const [result] = await (tx ?? this.drizzle.db)
+      .select({ count: count() })
+      .from(friendships)
+      .innerJoin(users, eq(users.id, friendships.friendId))
+      .where(and(eq(friendships.userId, userId), isNull(users.deletedAt)));
+    return result.count;
   }
 }

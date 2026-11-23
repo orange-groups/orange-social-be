@@ -103,7 +103,7 @@ describe('Backend API skeleton (no business logic)', () => {
     },
   );
 
-  it.each(routes)(
+  it.each(routes.filter(({ path }) => path !== '/profile/me'))(
     'returns 501 instead of fake success: $method $path',
     async ({ method, path, body }) => {
       const call = request(app.getHttpServer())
@@ -184,13 +184,5 @@ describe('Backend API skeleton (no business logic)', () => {
         limit: 5,
       }) as ListNotificationsDto,
     );
-  });
-
-  it('allows nullable optional profile fields to reach the placeholder', async () => {
-    await request(app.getHttpServer())
-      .patch('/profile/me')
-      .set('Authorization', 'Bearer test-token')
-      .send({ bio: null, dateOfBirth: null })
-      .expect(501);
   });
 });

@@ -4,7 +4,7 @@
 
 ## Hiện trạng và phụ thuộc
 
-`src/modules/profile/` có routes/DTO và ProfileService trả 501. Module đã import Auth, Friends, Media nhưng các service phụ thuộc chưa có nghiệp vụ. Có thể triển khai text profile trước avatar; không thay friendCount/relationship bằng số/quan hệ giả để che dependency còn thiếu.
+`GET /profile/me` và `PATCH /profile/me` đã triển khai. Các route hồ sơ công khai và avatar trong bảng dưới vẫn trả `501`. Xem [dev note](../dev-note.md) cho luồng cập nhật thông tin cá nhân.
 
 ## API hiện có
 
