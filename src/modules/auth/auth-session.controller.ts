@@ -20,6 +20,7 @@ import {
   REFRESH_TOKEN_MAX_AGE_MS,
 } from './auth.service';
 import type { AuthUserDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TrustedOriginGuard } from '../../common/guards/trusted-origin.guard';
@@ -89,6 +90,19 @@ export class AuthSessionController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AccessTokenPayload): Promise<AuthUserDto> {
     return this.authSessionService.getCurrentUser(user.sub);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ message: string }> {
+    await this.authSessionService.changePassword(user, dto);
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, refreshCookieOptions());
+    return { message: 'Đã đổi mật khẩu. Vui lòng đăng nhập lại.' };
   }
 
   private sendSession(res: Response, session: SessionResult): LoginResponseDto {

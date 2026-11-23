@@ -1,4 +1,7 @@
 import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -10,6 +13,7 @@ import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
 
 import { AuthService } from './auth.service';
+import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { AuthUserDto } from './dto/register.dto';
 import {
   SessionUserRecord,
@@ -117,6 +121,33 @@ export class AuthSessionService implements OnModuleInit {
       throw new NotFoundException('Không tìm thấy tài khoản.');
     }
     return toAuthUser(user);
+  }
+
+  async changePassword(
+    session: AccessTokenPayload,
+    { currentPassword, newPassword }: ChangePasswordDto,
+  ): Promise<void> {
+    const user = await this.repository.findById(session.sub);
+    if (!user || user.tokenVersion !== session.tokenVersion) {
+      throw new UnauthorizedException(SESSION_EXPIRED);
+    }
+
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new ForbiddenException('Mật khẩu hiện tại không đúng.');
+    }
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new BadRequestException(
+        'Mật khẩu mới phải khác mật khẩu hiện tại.',
+      );
+    }
+
+    const nextHash = await bcrypt.hash(newPassword, 10);
+    const didUpdate = await this.repository.replacePassword(user, nextHash);
+    if (!didUpdate) {
+      throw new ConflictException(
+        'Phiên đăng nhập đã thay đổi. Vui lòng đăng nhập lại.',
+      );
+    }
   }
 
   async verifyAccessToken(token: string): Promise<AccessTokenPayload> {

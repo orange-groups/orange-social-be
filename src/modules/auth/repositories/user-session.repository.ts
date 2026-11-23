@@ -65,6 +65,30 @@ export class UserSessionRepository {
       .where(eq(users.id, id));
   }
 
+  async replacePassword(
+    expected: Pick<SessionUserRecord, 'id' | 'passwordHash' | 'tokenVersion'>,
+    passwordHash: string,
+  ): Promise<boolean> {
+    const updated = await this.drizzle.db
+      .update(users)
+      .set({
+        passwordHash,
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        refreshTokenHash: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(users.id, expected.id),
+          eq(users.passwordHash, expected.passwordHash),
+          eq(users.tokenVersion, expected.tokenVersion),
+          isNull(users.deletedAt),
+        ),
+      )
+      .returning({ id: users.id });
+    return updated.length > 0;
+  }
+
   /**
    * Replaces the stored hash only if it is still `expectedHash`, so two requests
    * using the same refresh token cannot both rotate it. Returns false if it lost.
