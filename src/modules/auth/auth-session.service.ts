@@ -15,6 +15,7 @@ import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { AuthUserDto } from './dto/register.dto';
+import { hashPassword, verifyPassword } from './password-hash';
 import {
   SessionUserRecord,
   UserSessionRepository,
@@ -41,7 +42,7 @@ const SESSION_EXPIRED = 'Phiên đăng nhập đã hết hạn, vui lòng đăng
 
 @Injectable()
 export class AuthSessionService implements OnModuleInit {
-  /** Compared against when the email does not exist, so both cases take as long. */
+  /** Keep password verification work for missing accounts and legacy hashes. */
   private dummyPasswordHash = '';
 
   constructor(
@@ -52,14 +53,18 @@ export class AuthSessionService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    this.dummyPasswordHash = await bcrypt.hash('timing-equalizer', 10);
+    this.dummyPasswordHash = await hashPassword('timing-equalizer');
   }
 
   async login(email: string, password: string): Promise<SessionResult> {
     const user = await this.repository.findByEmail(email);
-    const isPasswordValid = await bcrypt
-      .compare(password, user?.passwordHash ?? this.dummyPasswordHash)
-      .catch(() => false);
+    const hash = user?.passwordHash ?? this.dummyPasswordHash;
+    const [isPasswordValid] = await Promise.all([
+      verifyPassword(password, hash),
+      hash.startsWith('$2')
+        ? verifyPassword(password, this.dummyPasswordHash)
+        : undefined,
+    ]);
 
     if (!user || !isPasswordValid) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
@@ -132,16 +137,16 @@ export class AuthSessionService implements OnModuleInit {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
-    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) {
       throw new ForbiddenException('Mật khẩu hiện tại không đúng.');
     }
-    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    if (newPassword === currentPassword) {
       throw new BadRequestException(
         'Mật khẩu mới phải khác mật khẩu hiện tại.',
       );
     }
 
-    const nextHash = await bcrypt.hash(newPassword, 10);
+    const nextHash = await hashPassword(newPassword);
     const didUpdate = await this.repository.replacePassword(user, nextHash);
     if (!didUpdate) {
       throw new ConflictException(

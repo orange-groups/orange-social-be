@@ -4,10 +4,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
-import * as bcrypt from 'bcrypt';
 import { createTransport } from 'nodemailer';
 import { DrizzleService } from '../../database/drizzle.service';
 import { PasswordRecoveryService } from './password-recovery.service';
+import { verifyPassword } from './password-hash';
 
 const mockRedis = { set: jest.fn(), del: jest.fn(), getdel: jest.fn() };
 const mockSend = jest.fn();
@@ -150,7 +150,7 @@ describe('PasswordRecoveryService', () => {
     );
   });
 
-  it('resets using bcrypt and revokes existing refresh sessions', async () => {
+  it('hashes the new password and revokes existing refresh sessions', async () => {
     await service.resetPassword('a'.repeat(64), 'new-password-123');
     const calls = set.mock.calls as unknown as [
       {
@@ -160,7 +160,7 @@ describe('PasswordRecoveryService', () => {
       },
     ][];
     const values = calls[0][0];
-    expect(await bcrypt.compare('new-password-123', values.passwordHash)).toBe(
+    expect(await verifyPassword('new-password-123', values.passwordHash)).toBe(
       true,
     );
     expect(values.refreshTokenHash).toBeNull();

@@ -1,10 +1,5 @@
-import {
-  IsByteLength,
-  IsNotEmpty,
-  IsString,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { NewPasswordPolicy } from '../password-policy';
 
 export class ChangePasswordDto {
   @IsString()
@@ -13,8 +8,6 @@ export class ChangePasswordDto {
   currentPassword!: string;
 
   @IsString()
-  @MinLength(12)
-  @MaxLength(72)
-  @IsByteLength(0, 72)
+  @NewPasswordPolicy()
   newPassword!: string;
 }

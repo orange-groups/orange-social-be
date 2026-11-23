@@ -89,10 +89,15 @@ unknown addresses. Requests are limited to one per address per minute.
 
 `POST /auth/reset-password` accepts `{ "token": "...", "newPassword": "..." }`.
 Tokens are random, stored as SHA-256 keys in Upstash Redis, expire after 15
-minutes, and are single-use. Passwords require at least 12 characters and at
-most 72 UTF-8 bytes (bcrypt limit). Reset revokes refresh tokens and increments
+minutes, and are single-use. Reset revokes refresh tokens and increments
 the version checked by access-token authentication. A database write failure
 after consuming a token requires requesting another link.
+
+Registration, reset, and authenticated password changes share the same policy:
+8–128 characters with a letter, a digit, and a special character. Uppercase
+and lowercase are not both required. New passwords are hashed with scrypt
+without bcrypt's 72-byte truncation. Login still supports existing bcrypt
+hashes; the refresh-token hash format is unchanged.
 
 Set `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM`,
 `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and

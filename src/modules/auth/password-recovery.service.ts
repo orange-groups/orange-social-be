@@ -8,9 +8,9 @@ import { Redis } from '@upstash/redis';
 import { createTransport } from 'nodemailer';
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import * as bcrypt from 'bcrypt';
 import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
+import { hashPassword } from './password-hash';
 
 const RECOVERY_MESSAGE =
   'Nếu email đã đăng ký, bạn sẽ nhận được link đặt lại mật khẩu.';
@@ -135,7 +135,7 @@ export class PasswordRecoveryService {
   ): Promise<{ message: string }> {
     const redis = this.redisClient();
     // Hash before consuming the one-time token.
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     let userId: string | null;
     try {
       userId = await redis.getdel<string>(this.tokenKey(token));

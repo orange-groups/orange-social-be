@@ -11,6 +11,7 @@ import { eq, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
 import { AuthUserDto, RegisterDto } from './dto/register.dto';
+import { hashPassword } from './password-hash';
 
 export const ACCESS_TOKEN_EXPIRES_IN = '15m';
 export const REFRESH_TOKEN_EXPIRES_IN = '1d';
@@ -47,7 +48,7 @@ export class AuthService {
     }
 
     const username = await this.generateUniqueUsername(normalizedEmail);
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_SALT_ROUNDS);
+    const passwordHash = await hashPassword(dto.password);
 
     const insertedUsers = await this.drizzle.db
       .insert(users)

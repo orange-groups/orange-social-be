@@ -1,10 +1,5 @@
-import {
-  IsByteLength,
-  IsString,
-  Matches,
-  MinLength,
-  MaxLength,
-} from 'class-validator';
+import { IsString, Matches } from 'class-validator';
+import { NewPasswordPolicy } from '../password-policy';
 
 export class ResetPasswordDto {
   @IsString()
@@ -12,8 +7,6 @@ export class ResetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(12)
-  @MaxLength(72)
-  @IsByteLength(0, 72)
+  @NewPasswordPolicy()
   newPassword!: string;
 }

@@ -1,0 +1,20 @@
+import * as bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from './password-hash';
+
+describe('Password hashes', () => {
+  it('keeps verifying existing bcrypt accounts', async () => {
+    const legacy = await bcrypt.hash('legacy-password', 4);
+    await expect(verifyPassword('legacy-password', legacy)).resolves.toBe(true);
+    await expect(verifyPassword('wrong-password', legacy)).resolves.toBe(false);
+  });
+
+  it('does not truncate passwords that share their first 72 UTF-8 bytes', async () => {
+    const prefix = 'ế'.repeat(24);
+    const storedHash = await hashPassword(`${prefix}1!`);
+    expect(storedHash).toMatch(/^scrypt-v1:/);
+    await expect(verifyPassword(`${prefix}1!`, storedHash)).resolves.toBe(true);
+    await expect(verifyPassword(`${prefix}2!`, storedHash)).resolves.toBe(
+      false,
+    );
+  });
+});

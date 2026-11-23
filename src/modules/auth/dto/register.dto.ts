@@ -1,12 +1,6 @@
 import { Transform } from 'class-transformer';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { NewPasswordPolicy } from '../password-policy';
 
 export class RegisterDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -25,12 +19,7 @@ export class RegisterDto {
   email!: string;
 
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
-  @MaxLength(128)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/, {
-    message:
-      'Password must contain at least 8 characters, including uppercase, lowercase, number, and special character',
-  })
+  @NewPasswordPolicy()
   password!: string;
 }
 

@@ -8,13 +8,14 @@ import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { configureHttpApi } from '../src/common/configure-http-api';
 import { DrizzleService } from '../src/database/drizzle.service';
+import { verifyPassword } from '../src/modules/auth/password-hash';
 import type { SessionUserRecord } from '../src/modules/auth/repositories/user-session.repository';
 import { UserSessionRepository } from '../src/modules/auth/repositories/user-session.repository';
 
 const ROUTE = '/auth/change-password';
 const EMAIL = 'change-password@example.test';
-const CURRENT = 'Current-test-password!';
-const NEXT = 'Next-test-password!';
+const CURRENT = 'Current-test-password1!';
+const NEXT = 'next-12!';
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 
 describe('POST /auth/change-password', () => {
@@ -161,7 +162,7 @@ describe('POST /auth/change-password', () => {
       data: { message: 'Đã đổi mật khẩu. Vui lòng đăng nhập lại.' },
     });
     expect(response.get('set-cookie')?.[0]).toMatch(/^refresh_token=;/);
-    expect(await bcrypt.compare(NEXT, user.passwordHash)).toBe(true);
+    expect(await verifyPassword(NEXT, user.passwordHash)).toBe(true);
     expect(user.tokenVersion).toBe(1);
     expect(user.refreshTokenHash).toBeNull();
     await agent.get('/auth/me').set('Authorization', token).expect(401);

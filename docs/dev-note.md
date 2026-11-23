@@ -17,9 +17,9 @@ Xem [hợp đồng API Profile](modules/profile.md). Đổi email, mật khẩu 
 
 ## UC-AUTH-01 — Đổi mật khẩu khi đang đăng nhập
 
-Tại `/profile`, người dùng nhập mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu mới. Frontend chỉ gửi `{ currentPassword, newPassword }` bằng `POST /auth/change-password` với Bearer access token. Mật khẩu mới tối thiểu 12 ký tự, tối đa 72 byte UTF-8 và phải khác mật khẩu hiện tại.
+Tại `/profile`, người dùng nhập mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu mới. Frontend chỉ gửi `{ currentPassword, newPassword }` bằng `POST /auth/change-password` với Bearer access token. Đăng ký, đặt lại và đổi mật khẩu dùng chung quy tắc: 8–128 ký tự, có chữ cái, chữ số và ký tự đặc biệt, không bắt buộc cả chữ hoa lẫn chữ thường. Khi đổi, mật khẩu mới phải khác mật khẩu hiện tại.
 
-Backend kiểm tra mật khẩu hiện tại bằng bcrypt rồi lưu hash mới, tăng `token_version` và đặt `refresh_token_hash` thành `null` trong cùng một lệnh cập nhật. Nếu mật khẩu đã bị đổi bởi request khác, lệnh không ghi đè và API trả `409`.
+Backend xác minh được hash bcrypt cũ và scrypt mới, sau đó lưu hash scrypt, tăng `token_version` và đặt `refresh_token_hash` thành `null` trong cùng một lệnh cập nhật. Nếu mật khẩu đã bị đổi bởi request khác, lệnh không ghi đè và API trả `409`. Scrypt không cắt mật khẩu ở 72 byte.
 
 - `200`: trả `{ "success": true, "data": { "message": "Đã đổi mật khẩu. Vui lòng đăng nhập lại." } }`, xóa refresh cookie và vô hiệu hóa các phiên cũ. Frontend xóa phiên trong bộ nhớ, chuyển về đăng nhập và thông báo thành công.
 - `400`: input không hợp lệ hoặc dùng lại mật khẩu hiện tại. `401`: thiếu hoặc hết hạn phiên. `403`: mật khẩu hiện tại không đúng.
