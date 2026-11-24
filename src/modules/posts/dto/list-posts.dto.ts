@@ -1,7 +1,12 @@
 import { IsUUID } from 'class-validator';
 import { CursorPaginationDto } from '../../../common/dto/cursor-pagination.dto';
 
-export class ListPostsDto extends CursorPaginationDto {
+export class ListOwnPostsDto extends CursorPaginationDto {
+  @IsUUID()
+  declare cursor?: string;
+}
+
+export class ListPostsDto extends ListOwnPostsDto {
   @IsUUID()
   authorId!: string;
 }

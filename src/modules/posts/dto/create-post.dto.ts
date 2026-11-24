@@ -1,19 +1,12 @@
-import {
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
-import type { PostPrivacy } from '../types/post.types';
+import { Transform } from 'class-transformer';
+import { IsString, MaxLength, ValidateIf } from 'class-validator';
 
 export class CreatePostDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
   @IsString()
-  @MinLength(1)
   @MaxLength(5000)
-  content!: string;
-
-  @IsOptional()
-  @IsIn(['public', 'friends', 'only_me'])
-  privacy: PostPrivacy = 'public';
+  content?: string;
 }

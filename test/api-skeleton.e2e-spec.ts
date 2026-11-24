@@ -48,8 +48,9 @@ const routes: RouteCase[] = [
   {
     method: 'post',
     path: '/posts',
-    body: { content: 'Test post', privacy: 'friends' },
+    body: { content: 'Test post' },
   },
+  { method: 'get', path: '/posts/me' },
   { method: 'get', path: `/posts/${RESOURCE_ID}` },
   { method: 'get', path: `/posts?authorId=${RESOURCE_ID}` },
   { method: 'delete', path: `/posts/${RESOURCE_ID}` },
@@ -103,7 +104,25 @@ describe('Backend API skeleton (no business logic)', () => {
     },
   );
 
-  it.each(routes.filter(({ path }) => path !== '/profile/me'))(
+  it.each(
+    routes.filter(
+      ({ method, path }) =>
+        path !== '/users?q=test' &&
+        !path.startsWith('/notifications') &&
+        !(method === 'post' && path === '/friends/requests') &&
+        !(method === 'delete' && path === `/friends/requests/${RESOURCE_ID}`) &&
+        ![
+          `/friends/requests/${RESOURCE_ID}/accept`,
+          '/friends',
+          '/friends/requests?direction=incoming',
+          '/profile/me',
+          `/profile/${RESOURCE_ID}`,
+          '/posts',
+          '/posts/me',
+          `/posts?authorId=${RESOURCE_ID}`,
+        ].includes(path),
+    ),
+  )(
     'returns 501 instead of fake success: $method $path',
     async ({ method, path, body }) => {
       const call = request(app.getHttpServer())
@@ -172,11 +191,13 @@ describe('Backend API skeleton (no business logic)', () => {
   });
 
   it('parses unreadOnly=false as false and delegates the authenticated ID', async () => {
-    const list = jest.spyOn(notifications, 'listForUser');
+    const list = jest
+      .spyOn(notifications, 'listForUser')
+      .mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
     await request(app.getHttpServer())
       .get('/notifications?unreadOnly=false&limit=5')
       .set('Authorization', 'Bearer test-token')
-      .expect(501);
+      .expect(200);
     expect(list).toHaveBeenCalledWith(
       USER_ID,
       expect.objectContaining({

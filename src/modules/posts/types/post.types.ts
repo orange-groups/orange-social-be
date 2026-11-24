@@ -2,6 +2,12 @@ import type { UserSummary } from '../../../common/types/user-summary';
 
 export type PostPrivacy = 'public' | 'friends' | 'only_me';
 
+export interface PostAttachment {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+}
+
 export interface PostRecord {
   id: string;
   author: UserSummary;
@@ -12,6 +18,7 @@ export interface PostRecord {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  media: PostAttachment[];
 }
 
 export interface LatestPostsPageInput {
