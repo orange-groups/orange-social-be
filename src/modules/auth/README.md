@@ -83,9 +83,10 @@ npm run test:e2e               # e2e (mock database)
 ```
 # Password recovery
 
-`POST /auth/forgot-password` accepts `{ "email": "..." }` and sends an SMTP
-reset link for registered users. The response is deliberately the same for
-unknown addresses. Requests are limited to one per address per minute.
+`POST /auth/forgot-password` accepts `{ "email": "..." }` and sends a reset
+link through Resend for registered users. Unknown addresses and delivery
+failures return the same public message. Requests are limited to one per
+address per minute.
 
 `POST /auth/reset-password` accepts `{ "token": "...", "newPassword": "..." }`.
 Tokens are random, stored as SHA-256 keys in Upstash Redis, expire after 15
@@ -99,13 +100,13 @@ and lowercase are not both required. New passwords are hashed with scrypt
 without bcrypt's 72-byte truncation. Login still supports existing bcrypt
 hashes; the refresh-token hash format is unchanged.
 
-Set `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM`,
-`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and
-`FRONTEND_URL=http://localhost:5173` in `.env`. Without these settings, recovery
-returns 503; login/registration still work. Use a sender authorized by your SMTP
-provider. Port 465 normally uses `MAIL_SECURE=true`; port 587 uses
-`MAIL_SECURE=false` with required STARTTLS. Both username and password must be
-provided together; omit both only for an SMTP server allowing unauthenticated
-delivery. No Resend API key is required.
+Set `RESEND_API_KEY`, `MAIL_FROM`, `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`, and `FRONTEND_URL=http://localhost:5173` in backend
+`.env`. Use an API key with **Sending access**. For development, use
+`Orange Social <onboarding@resend.dev>` with Resend's test addresses or the
+address associated with your Resend account. For production recipients, verify
+your sending domain in Resend and configure `MAIL_FROM` on that domain.
+Missing configuration returns `503`; login/registration still work. Keep
+the key out of frontend configuration and Git.
 
 This integration does not implement six-digit email verification.

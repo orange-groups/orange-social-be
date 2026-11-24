@@ -4,31 +4,30 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
-import { createTransport } from 'nodemailer';
 import { DrizzleService } from '../../database/drizzle.service';
+import { MailService } from '../mail/mail.service';
+import type {
+  PasswordResetMailInput,
+  SentMail,
+} from '../mail/types/mail.types';
 import { PasswordRecoveryService } from './password-recovery.service';
 import { verifyPassword } from './password-hash';
 
 const mockRedis = { set: jest.fn(), del: jest.fn(), getdel: jest.fn() };
-const mockSend = jest.fn();
+const mockSend = jest.fn<Promise<SentMail>, [PasswordResetMailInput]>();
 jest.mock('@upstash/redis', () => ({ Redis: jest.fn(() => mockRedis) }));
-jest.mock('nodemailer', () => ({
-  createTransport: jest.fn(() => ({ sendMail: mockSend })),
-}));
 
 describe('PasswordRecoveryService', () => {
   const settings: Record<string, string> = {
     UPSTASH_REDIS_REST_URL: 'https://redis.example.invalid',
     UPSTASH_REDIS_REST_TOKEN: 'test-token',
-    MAIL_HOST: 'smtp.example.invalid',
-    MAIL_PORT: '587',
-    MAIL_SECURE: 'false',
-    MAIL_USER: 'test-user',
-    MAIL_PASSWORD: 'test-password',
-    MAIL_FROM: 'Orange <test@example.invalid>',
     FRONTEND_URL: 'http://localhost:5173',
   };
   const user = { id: 'user-1', email: 'test@example.invalid' };
+  const mail = {
+    assertConfigured: jest.fn(),
+    sendPasswordReset: mockSend,
+  } as unknown as MailService;
   let service: PasswordRecoveryService;
   let limit: jest.Mock;
   let set: jest.Mock;
@@ -39,7 +38,7 @@ describe('PasswordRecoveryService', () => {
     mockRedis.set.mockResolvedValue('OK');
     mockRedis.del.mockResolvedValue(1);
     mockRedis.getdel.mockResolvedValue(user.id);
-    mockSend.mockResolvedValue({ accepted: [user.email], rejected: [] });
+    mockSend.mockResolvedValue({ providerMessageId: 'test-message-id' });
     limit = jest.fn().mockResolvedValue([user]);
     returning = jest.fn().mockResolvedValue([{ id: user.id }]);
     set = jest
@@ -55,28 +54,23 @@ describe('PasswordRecoveryService', () => {
         update: jest.fn().mockReturnValue({ set }),
       },
     } as unknown as DrizzleService;
-    service = new PasswordRecoveryService(database, {
-      get: (key: string) => settings[key],
-    } as ConfigService);
+    service = new PasswordRecoveryService(
+      database,
+      { get: (key: string) => settings[key] } as ConfigService,
+      mail,
+    );
   });
 
   it('sends a token link and stores only its digest for 15 minutes', async () => {
     await service.forgotPassword(user.email);
-    const calls = mockSend.mock.calls as unknown as [
-      { text: string; to: string },
-    ][];
-    const mail = calls[0][0];
-    expect(mail.to).toBe(user.email);
-    expect(createTransport).toHaveBeenCalledWith(
-      expect.objectContaining({
-        host: settings.MAIL_HOST,
-        port: 587,
-        secure: false,
-        requireTLS: true,
-        auth: { user: settings.MAIL_USER, pass: settings.MAIL_PASSWORD },
-      }),
-    );
-    const token = mail.text.match(/token=([a-f0-9]{64})/)?.[1];
+    const input = mockSend.mock.calls[0][0];
+    expect(input.to).toBe(user.email);
+    const url = new URL(input.resetUrl);
+    expect(url.origin).toBe(settings.FRONTEND_URL);
+    expect(url.pathname).toBe('/reset-password');
+    expect(input.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    const token = url.searchParams.get('token');
+    expect(token).toMatch(/^[a-f0-9]{64}$/);
     expect(token).toBeDefined();
     if (!token) throw new Error('Expected a reset token in the email');
     const digest = createHash('sha256').update(token).digest('hex');
@@ -104,31 +98,26 @@ describe('PasswordRecoveryService', () => {
     expect(limit).not.toHaveBeenCalled();
   });
 
-  it('removes the token when delivery fails', async () => {
-    mockSend.mockRejectedValue(new Error('SMTP unavailable'));
-    await expect(service.forgotPassword(user.email)).rejects.toThrow(
-      ServiceUnavailableException,
-    );
+  it('removes the token when delivery fails without revealing account existence', async () => {
+    mockSend.mockRejectedValue(new ServiceUnavailableException());
+    const known = await service.forgotPassword(user.email);
     expect(mockRedis.del).toHaveBeenCalledWith(
       expect.stringMatching(/^password-reset:/),
     );
-  });
-
-  it('removes the token when SMTP rejects the recipient', async () => {
-    mockSend.mockResolvedValue({ accepted: [], rejected: [user.email] });
-    await expect(service.forgotPassword(user.email)).rejects.toThrow(
-      ServiceUnavailableException,
+    limit.mockResolvedValue([]);
+    expect(await service.forgotPassword('unknown@example.invalid')).toEqual(
+      known,
     );
-    expect(mockRedis.del).toHaveBeenCalled();
   });
 
-  it('rejects incomplete SMTP credentials without sending email', async () => {
+  it('rejects invalid frontend URLs without sending email', async () => {
     const invalid = new PasswordRecoveryService(
       {} as DrizzleService,
       {
         get: (key: string) =>
-          key === 'MAIL_PASSWORD' ? undefined : settings[key],
+          key === 'FRONTEND_URL' ? 'file:///tmp' : settings[key],
       } as ConfigService,
+      mail,
     );
     await expect(invalid.forgotPassword(user.email)).rejects.toThrow(
       ServiceUnavailableException,
@@ -140,6 +129,7 @@ describe('PasswordRecoveryService', () => {
     const unconfigured = new PasswordRecoveryService(
       {} as DrizzleService,
       { get: () => undefined } as unknown as ConfigService,
+      mail,
     );
     await expect(unconfigured.forgotPassword(user.email)).rejects.toThrow(
       ServiceUnavailableException,

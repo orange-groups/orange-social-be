@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '../../database/database.module';
+import { MailModule } from '../mail/mail.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthSessionController } from './auth-session.controller';
@@ -13,7 +14,7 @@ import { PasswordRecoveryController } from './password-recovery.controller';
 import { PasswordRecoveryService } from './password-recovery.service';
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, JwtModule.register({})],
+  imports: [ConfigModule, DatabaseModule, JwtModule.register({}), MailModule],
   controllers: [
     AuthController,
     AuthSessionController,
