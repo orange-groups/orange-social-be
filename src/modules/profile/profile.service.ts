@@ -9,22 +9,28 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
 import { FriendsService } from '../friends/friends.service';
+import { MediaService } from '../media/media.service';
 import type {
   AvatarResponseDto,
+  CoverResponseDto,
   MyProfileResponseDto,
   ProfileResponseDto,
 } from './dto/profile-response.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 
-const MY_PROFILE_COLUMNS = {
+const PUBLIC_PROFILE_COLUMNS = {
   id: users.id,
   username: users.username,
   fullName: users.fullName,
   avatarUrl: users.avatarUrl,
   coverUrl: users.coverUrl,
   bio: users.bio,
-  dateOfBirth: users.dateOfBirth,
   createdAt: users.createdAt,
+};
+
+const MY_PROFILE_COLUMNS = {
+  ...PUBLIC_PROFILE_COLUMNS,
+  dateOfBirth: users.dateOfBirth,
 };
 
 type ProfileRow = Pick<
@@ -54,6 +60,7 @@ export class ProfileService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly friends: FriendsService,
+    private readonly media: MediaService,
   ) {}
 
   async getMyProfile(userId: string): Promise<MyProfileResponseDto> {
@@ -66,10 +73,32 @@ export class ProfileService {
     return toMyProfile(row, await this.friends.countFriends(userId));
   }
 
-  getProfile(_viewerId: string, _userId: string): Promise<ProfileResponseDto> {
-    throw new NotImplementedException(
-      'Public profile lookup is not implemented.',
-    );
+  async getProfile(
+    viewerId: string,
+    userId: string,
+  ): Promise<ProfileResponseDto> {
+    const [row] = await this.drizzle.db
+      .select(PUBLIC_PROFILE_COLUMNS)
+      .from(users)
+      .where(activeProfile(userId))
+      .limit(1);
+    if (!row) throw new NotFoundException('Không tìm thấy hồ sơ.');
+
+    const [friendCount, relationship] = await Promise.all([
+      this.friends.countFriends(row.id),
+      this.friends.getRelationship(viewerId, row.id),
+    ]);
+    return {
+      id: row.id,
+      username: row.username,
+      fullName: row.fullName,
+      avatarUrl: row.avatarUrl,
+      coverUrl: row.coverUrl,
+      bio: row.bio,
+      createdAt: row.createdAt.toISOString(),
+      friendCount,
+      relationship,
+    };
   }
 
   async updateProfile(
@@ -119,6 +148,36 @@ export class ProfileService {
       if (!row) throw new NotFoundException('Không tìm thấy hồ sơ.');
       return toMyProfile(row, await this.friends.countFriends(userId, tx));
     });
+  }
+
+  async updateAvatar(
+    userId: string,
+    image: Buffer | undefined,
+  ): Promise<AvatarResponseDto> {
+    const { secureUrl } = await this.media.uploadAvatar(userId, image);
+    const [profile] = await this.drizzle.db
+      .update(users)
+      .set({ avatarUrl: secureUrl, updatedAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .returning({ avatarUrl: users.avatarUrl });
+
+    if (!profile) throw new NotFoundException('Không tìm thấy hồ sơ.');
+    return profile;
+  }
+
+  async updateCover(
+    userId: string,
+    image: Buffer | undefined,
+  ): Promise<CoverResponseDto> {
+    const { secureUrl: coverUrl } = await this.media.uploadCover(userId, image);
+    const [profile] = await this.drizzle.db
+      .update(users)
+      .set({ coverUrl, updatedAt: new Date() })
+      .where(activeProfile(userId))
+      .returning({ id: users.id });
+
+    if (!profile) throw new NotFoundException('Không tìm thấy hồ sơ.');
+    return { coverUrl };
   }
 
   completeAvatarUpload(

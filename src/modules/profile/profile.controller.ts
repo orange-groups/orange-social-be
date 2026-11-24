@@ -8,11 +8,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/auth-session.service';
+import {
+  AvatarFileInterceptor,
+  CoverFileInterceptor,
+} from '../media/avatar-file.interceptor';
+import type { ProfileImageFile } from '../media/avatar-file.interceptor';
 import { CompleteProfileImageDto } from './dto/complete-profile-image.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileService } from './profile.service';
@@ -33,6 +40,26 @@ export class ProfileController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.profile.updateProfile(user.sub, dto);
+  }
+
+  @Post('me/avatar')
+  @HttpCode(200)
+  @UseInterceptors(AvatarFileInterceptor)
+  updateAvatar(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file?: ProfileImageFile,
+  ) {
+    return this.profile.updateAvatar(user.sub, file?.buffer);
+  }
+
+  @Post('me/cover')
+  @HttpCode(200)
+  @UseInterceptors(CoverFileInterceptor)
+  updateCover(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file?: ProfileImageFile,
+  ) {
+    return this.profile.updateCover(user.sub, file?.buffer);
   }
 
   @Post('me/avatar/complete')

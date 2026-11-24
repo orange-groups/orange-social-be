@@ -16,3 +16,7 @@ export interface MyProfileResponseDto extends ProfileResponseDto {
 export interface AvatarResponseDto {
   avatarUrl: string | null;
 }
+
+export interface CoverResponseDto {
+  coverUrl: string;
+}

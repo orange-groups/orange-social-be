@@ -10,9 +10,11 @@ import { DrizzleService } from '../src/database/drizzle.service';
 import { users } from '../src/database/schema';
 import { AuthSessionService } from '../src/modules/auth/auth-session.service';
 import { FriendsService } from '../src/modules/friends/friends.service';
+import type { Relationship } from '../src/modules/friends/types/friends.types';
 
 const ROUTE = '/profile/me';
 const USER_ID = '00000000-0000-4000-8000-000000000001';
+const TARGET_ID = '00000000-0000-4000-8000-000000000002';
 const AUTHORIZE = 'Bearer test-token';
 const ROW = {
   id: USER_ID,
@@ -35,6 +37,7 @@ const RESPONSE = {
 describe('Personal profile', () => {
   let app: INestApplication<App>;
   const countFriends = jest.fn().mockResolvedValue(3);
+  const getRelationship = jest.fn<Promise<Relationship>, [string, string]>();
   const limit = jest.fn();
   const readScope = jest.fn<{ limit: typeof limit }, [SQL]>(() => ({ limit }));
   const from = jest.fn(() => ({ where: readScope }));
@@ -58,7 +61,7 @@ describe('Personal profile', () => {
       .overrideProvider(AuthSessionService)
       .useValue({ verifyAccessToken: () => Promise.resolve({ sub: USER_ID }) })
       .overrideProvider(FriendsService)
-      .useValue({ countFriends })
+      .useValue({ countFriends, getRelationship })
       .compile();
     app = module.createNestApplication();
     configureHttpApi(app);
@@ -69,6 +72,7 @@ describe('Personal profile', () => {
     jest.clearAllMocks();
     limit.mockResolvedValue([ROW]);
     returning.mockResolvedValue([ROW]);
+    getRelationship.mockResolvedValue({ status: 'none', requestId: null });
   });
 
   afterAll(async () => app.close());
@@ -88,6 +92,83 @@ describe('Personal profile', () => {
     expectActiveUserScope(readScope.mock.calls[0][0]);
     expect(countFriends).toHaveBeenCalledWith(USER_ID);
     expect(response.body).toEqual({ success: true, data: RESPONSE });
+  });
+
+  it('returns only public fields for another user and delegates the actual viewer', async () => {
+    limit.mockResolvedValueOnce([
+      {
+        ...ROW,
+        id: TARGET_ID,
+        email: 'private@example.test',
+        passwordHash: 'private',
+      },
+    ]);
+    getRelationship.mockResolvedValueOnce({
+      status: 'friends',
+      requestId: null,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/profile/${TARGET_ID}`)
+      .set('Authorization', AUTHORIZE)
+      .expect(200);
+
+    expect(select).toHaveBeenCalledWith({
+      id: users.id,
+      username: users.username,
+      fullName: users.fullName,
+      bio: users.bio,
+      avatarUrl: users.avatarUrl,
+      coverUrl: users.coverUrl,
+      createdAt: users.createdAt,
+    });
+    expect(
+      new PgDialect().sqlToQuery(readScope.mock.calls[0][0]),
+    ).toMatchObject({
+      sql: '("users"."id" = $1 and "users"."deleted_at" is null)',
+      params: [TARGET_ID],
+    });
+    expect(countFriends).toHaveBeenCalledWith(TARGET_ID);
+    expect(getRelationship).toHaveBeenCalledWith(USER_ID, TARGET_ID);
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        id: TARGET_ID,
+        username: ROW.username,
+        fullName: ROW.fullName,
+        avatarUrl: null,
+        coverUrl: null,
+        bio: ROW.bio,
+        createdAt: ROW.createdAt.toISOString(),
+        friendCount: 3,
+        relationship: { status: 'friends', requestId: null },
+      },
+    });
+  });
+
+  it('does not expose the birthday on the public route even for the owner', async () => {
+    getRelationship.mockResolvedValueOnce({ status: 'self', requestId: null });
+    const response = await request(app.getHttpServer())
+      .get(`/profile/${USER_ID}`)
+      .set('Authorization', AUTHORIZE)
+      .expect(200);
+    expect(response.body).not.toHaveProperty('data.dateOfBirth');
+  });
+
+  it('rejects unauthenticated, invalid and missing public profiles', async () => {
+    await request(app.getHttpServer()).get(`/profile/${TARGET_ID}`).expect(401);
+    await request(app.getHttpServer())
+      .get('/profile/not-a-uuid')
+      .set('Authorization', AUTHORIZE)
+      .expect(400);
+    expect(select).not.toHaveBeenCalled();
+    limit.mockResolvedValueOnce([]);
+    await request(app.getHttpServer())
+      .get(`/profile/${TARGET_ID}`)
+      .set('Authorization', AUTHORIZE)
+      .expect(404);
+    expect(getRelationship).not.toHaveBeenCalled();
+    expect(countFriends).not.toHaveBeenCalled();
   });
 
   it('trims allowed fields and leaves omitted fields unchanged', async () => {
