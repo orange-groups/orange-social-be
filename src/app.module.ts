@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -13,11 +14,28 @@ import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MediaModule } from './modules/media/media.module';
 import { DatabaseModule } from './database/database.module';
-import { ConfigModule } from '@nestjs/config';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProfileModule, FeedModule, PostsModule, CommentsModule, ReactionsModule, FriendsModule, ChatModule, NotificationsModule, MediaModule, DatabaseModule,
-    ConfigModule.forRoot({isGlobal: true,})],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
+    }),
+    DatabaseModule,
+    MailModule,
+    AuthModule,
+    UsersModule,
+    ProfileModule,
+    FeedModule,
+    PostsModule,
+    CommentsModule,
+    ReactionsModule,
+    FriendsModule,
+    ChatModule,
+    NotificationsModule,
+    MediaModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

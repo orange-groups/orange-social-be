@@ -1,0 +1,13 @@
+mail service -> smtp gmail
+redis -> password forgot; upstash redit
+
+đăng kí dịch vụ lưu trữ ảnh - dũng dt - Cloudinary
+sửa dịch vụ email -> resend
+thiết kế lại giao diện?
+chỉnh sửa phần cập nhập bio:
+- fe gửi ảnh lên cloud, nhận lại link và gửi về be.
+tính năng kết bạn 
+đăng bài viết dạng text
+news feed: lấy list các bài từ module gợi ý, hiển thị ở fe ở dạng list vô tận 
+thuật toán gợi í: ban đầu là 
+thông báo: các module khác gọi module thông báo 1 cách độc lập

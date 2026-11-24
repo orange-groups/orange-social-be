@@ -1,34 +1,42 @@
-
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Post,
+  Res,
 } from '@nestjs/common';
-
-import { AuthService } from './auth.service';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import type { Response } from 'express';
+import {
+  AuthService,
+  REFRESH_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_MAX_AGE_MS,
+} from './auth.service';
+import { RegisterDto, RegisterResponseDto } from './dto/register.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-  @Post('forgot-password')
-  async forgotPassword(
-    @Body() dto: ForgotPasswordDto,
-  ) {
-    return this.authService.forgotPassword(dto.email);
-  }
+  @Post('regis')
+  @HttpCode(HttpStatus.CREATED)
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<RegisterResponseDto> {
+    const result = await this.authService.register(registerDto);
 
-  @Post('reset-password')
-  async resetPassword(
-    @Body() dto: ResetPasswordDto,
-  ) {
-    return this.authService.resetPassword(
-      dto.token,
-      dto.newPassword,
-    );
+    response.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+      path: '/auth',
+    });
+
+    return {
+      accessToken: result.accessToken,
+      user: result.user,
+    };
   }
 }

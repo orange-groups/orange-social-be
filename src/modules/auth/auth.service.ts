@@ -1,157 +1,174 @@
-
 import {
-  BadRequestException,
+  ConflictException,
   Injectable,
-  ServiceUnavailableException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Redis } from '@upstash/redis';
-import { Resend } from 'resend';
-import { createHash, randomBytes } from 'node:crypto';
-import { sql } from 'drizzle-orm';
-import * as argon2 from 'argon2';
-
-import { DatabaseService } from '../../database/database.service';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
+import { eq, sql } from 'drizzle-orm';
+import { DrizzleService } from '../../database/drizzle.service';
 import { users } from '../../database/schema';
+import { AuthUserDto, RegisterDto } from './dto/register.dto';
+import { hashPassword } from './password-hash';
+
+export const ACCESS_TOKEN_EXPIRES_IN = '15m';
+export const REFRESH_TOKEN_EXPIRES_IN = '1d';
+export const REFRESH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const REFRESH_TOKEN_COOKIE_NAME = 'refresh_token';
+const BCRYPT_SALT_ROUNDS = 10;
+
+export interface RegisterResult {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUserDto;
+}
 
 @Injectable()
 export class AuthService {
-  private readonly redis: Redis;
-  private readonly resend: Resend;
-
   constructor(
-    private readonly databaseService: DatabaseService,
+    private readonly drizzle: DrizzleService,
+    private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {
-    this.redis = new Redis({
-      url: this.configService.getOrThrow<string>(
-        'UPSTASH_REDIS_REST_URL',
-      ),
-      token: this.configService.getOrThrow<string>(
-        'UPSTASH_REDIS_REST_TOKEN',
-      ),
-    });
+  ) {}
 
-    this.resend = new Resend(
-      this.configService.getOrThrow<string>(
-        'RESEND_API_KEY',
-      ),
-    );
-  }
+  async register(dto: RegisterDto): Promise<RegisterResult> {
+    const normalizedEmail = dto.email.trim().toLowerCase();
+    const trimmedFullName = dto.fullName.trim();
 
-  private hashToken(token: string): string {
-    return createHash('sha256')
-      .update(token)
-      .digest('hex');
-  }
-
-  async forgotPassword(email: string) {
-    const message =
-      'Nếu email đã đăng ký, bạn sẽ nhận được link đặt lại mật khẩu.';
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const [user] = await this.databaseService.db
-      .select({
-        id: users.id,
-        email: users.email,
-      })
+    const existingUsers = await this.drizzle.db
+      .select({ id: users.id })
       .from(users)
-      .where(
-        sql`lower(${users.email}) = ${normalizedEmail}
-            AND ${users.deletedAt} IS NULL`,
-      )
+      .where(sql`lower(${users.email}) = ${normalizedEmail}`)
       .limit(1);
 
-    // Giữ cùng một thông báo dù email không tồn tại.
-    if (!user) {
-      return { message };
+    if (existingUsers.length > 0) {
+      throw new ConflictException('Email is already registered');
     }
 
-    const token = randomBytes(32).toString('hex');
-    const tokenHash = this.hashToken(token);
+    const username = await this.generateUniqueUsername(normalizedEmail);
+    const passwordHash = await hashPassword(dto.password);
 
-    const redisKey = `password-reset:${tokenHash}`;
+    const insertedUsers = await this.drizzle.db
+      .insert(users)
+      .values({
+        email: normalizedEmail,
+        username,
+        passwordHash,
+        fullName: trimmedFullName,
+      })
+      .returning();
 
-    // Token tồn tại trong 15 phút.
-    await this.redis.set(redisKey, user.id, {
-      ex: 900,
-    });
-
-    const frontendUrl = this.configService
-      .getOrThrow<string>('FRONTEND_URL')
-      .replace(/\/$/, '');
-
-    const resetLink =
-      `${frontendUrl}/reset-password?token=${token}`;
-
-    try {
-      const result = await this.resend.emails.send({
-        from: this.configService.getOrThrow<string>(
-          'MAIL_FROM',
-        ),
-        to: user.email,
-        subject: 'Orange Social - Reset Password',
-        text:
-          `Bạn đã yêu cầu đặt lại mật khẩu.\n\n` +
-          `Truy cập liên kết: ${resetLink}\n\n` +
-          `Liên kết hết hạn sau 15 phút.`,
-      });
-
-      if (result.error) {
-        throw new Error('Email delivery failed');
-      }
-    } catch {
-      await this.redis.del(redisKey);
-
-      throw new ServiceUnavailableException(
-        'Dịch vụ gửi email tạm thời không khả dụng.',
-      );
+    const createdUser = insertedUsers[0];
+    if (!createdUser) {
+      throw new InternalServerErrorException('Failed to create user account');
     }
 
-    return { message };
-  }
+    const { accessToken, refreshToken } = await this.issueTokens(
+      createdUser.id,
+      createdUser.email,
+      createdUser.username,
+      createdUser.tokenVersion,
+    );
 
-  async resetPassword(
-    token: string,
-    newPassword: string,
-  ) {
-    const tokenHash = this.hashToken(token);
-    const redisKey = `password-reset:${tokenHash}`;
+    const refreshTokenHash = await this.hashRefreshToken(refreshToken);
 
-    // GETDEL lấy và xóa token trong một thao tác Redis.
-    const userId =
-      await this.redis.getdel<string>(redisKey);
-
-    if (!userId) {
-      throw new BadRequestException(
-        'Token không hợp lệ hoặc đã hết hạn.',
-      );
-    }
-
-    const passwordHash = await argon2.hash(newPassword);
-
-    const updated = await this.databaseService.db
+    await this.drizzle.db
       .update(users)
       .set({
-        passwordHash,
-        tokenVersion: sql`${users.tokenVersion} + 1`,
+        refreshTokenHash,
         updatedAt: new Date(),
       })
-      .where(
-        sql`${users.id} = ${userId}
-            AND ${users.deletedAt} IS NULL`,
-      )
-      .returning({ id: users.id });
-
-    if (updated.length === 0) {
-      throw new BadRequestException(
-        'Không thể đặt lại mật khẩu.',
-      );
-    }
+      .where(eq(users.id, createdUser.id));
 
     return {
-      message: 'Đặt lại mật khẩu thành công.',
+      accessToken,
+      refreshToken,
+      user: {
+        id: createdUser.id,
+        email: createdUser.email,
+        username: createdUser.username,
+        fullName: createdUser.fullName,
+        avatarUrl: createdUser.avatarUrl,
+        isEmailVerified: createdUser.isEmailVerified,
+        createdAt: createdUser.createdAt.toISOString(),
+      },
     };
+  }
+
+  async hashRefreshToken(refreshToken: string): Promise<string> {
+    const digest = createHash('sha256').update(refreshToken).digest('hex');
+    return bcrypt.hash(digest, BCRYPT_SALT_ROUNDS);
+  }
+
+  async issueTokens(
+    userId: string,
+    email: string,
+    username: string,
+    tokenVersion: number,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const accessSecret =
+      this.configService.get<string>('JWT_ACCESS_SECRET') ??
+      'orange_dev_access_secret_key';
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ??
+      'orange_dev_refresh_secret_key';
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+          email,
+          username,
+          tokenVersion,
+        },
+        {
+          secret: accessSecret,
+          expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+        },
+      ),
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+          tokenVersion,
+          type: 'refresh',
+        },
+        {
+          secret: refreshSecret,
+          expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        },
+      ),
+    ]);
+
+    return { accessToken, refreshToken };
+  }
+
+  private async generateUniqueUsername(email: string): Promise<string> {
+    const localPart = email.split('@')[0] ?? 'user';
+    const sanitized = localPart
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 36);
+    const baseUsername = sanitized.length >= 3 ? sanitized : 'orange_user';
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate =
+        attempt === 0
+          ? baseUsername
+          : `${baseUsername}_${randomBytes(3).toString('hex')}`;
+
+      const existing = await this.drizzle.db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.username}) = ${candidate}`)
+        .limit(1);
+
+      if (existing.length === 0) {
+        return candidate;
+      }
+    }
+
+    return `${baseUsername}_${Date.now().toString(36)}`;
   }
 }

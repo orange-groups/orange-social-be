@@ -21,19 +21,22 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^12.0.1",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
-    "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/platform-socket.io": "^11",
-    "@nestjs/websockets": "^11",
-    "@upstash/redis": "^1.40.0",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/platform-express": "^11.2.9",
+    "@nestjs/platform-socket.io": "^11.2.8",
+    "@nestjs/websockets": "^11.2.8",
+    "@upstash/redis": "^1.41.0",
     "argon2": "^0.45.1",
+    "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "cloudinary": "^2.11.0",
+    "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.9",
     "reflect-metadata": "^0.2.2",
-    "resend": "^6.34.1",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.4"
   },
@@ -43,6 +46,8 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
@@ -61,6 +66,22 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
+  },
+  "overrides": {
+    "body-parser": "^2.4.0",
+    "qs": "^6.17.1",
+    "fast-uri": "^3.1.9",
+    "glob": "^14.0.4",
+    "minimatch@>=7 <11.0.1": "^11.0.5"
+  },
+  "resolutions": {
+    "**/body-parser": "^2.4.0",
+    "**/qs": "^6.17.1",
+    "**/fast-uri": "^3.1.9",
+    "**/glob": "^14.0.4",
+    "**/glob/minimatch": "^11.0.5",
+    "**/@typescript-eslint/typescript-estree/minimatch": "^11.0.5",
+    "**/test-exclude/minimatch": "^11.0.5"
   },
   "jest": {
     "moduleFileExtensions": [
