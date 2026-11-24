@@ -1,3 +1,4 @@
+import * as argon2 from 'argon2';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 
@@ -35,6 +36,10 @@ export async function verifyPassword(
   if (storedHash.startsWith('$2')) {
     // Preserve login for accounts created before the password-hash change.
     return bcrypt.compare(password, storedHash).catch(() => false);
+  }
+  if (storedHash.startsWith('$argon2id$')) {
+    // The previous password reset implementation on main used Argon2id.
+    return argon2.verify(storedHash, password).catch(() => false);
   }
   return false;
 }

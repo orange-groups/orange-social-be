@@ -1,3 +1,4 @@
+import * as argon2 from 'argon2';
 import * as bcrypt from 'bcrypt';
 import { hashPassword, verifyPassword } from './password-hash';
 
@@ -6,6 +7,15 @@ describe('Password hashes', () => {
     const legacy = await bcrypt.hash('legacy-password', 4);
     await expect(verifyPassword('legacy-password', legacy)).resolves.toBe(true);
     await expect(verifyPassword('wrong-password', legacy)).resolves.toBe(false);
+  });
+
+  it('verifies passwords reset by the former Argon2id implementation', async () => {
+    const legacy = await argon2.hash('legacy-password');
+    await expect(verifyPassword('legacy-password', legacy)).resolves.toBe(true);
+    await expect(verifyPassword('wrong-password', legacy)).resolves.toBe(false);
+    await expect(
+      verifyPassword('legacy-password', '$argon2id$broken'),
+    ).resolves.toBe(false);
   });
 
   it('does not truncate passwords that share their first 72 UTF-8 bytes', async () => {
