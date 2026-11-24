@@ -1,40 +1,145 @@
-# Notifications — persistence và polling
+# Guide triển khai Notifications
 
-[Mục lục và quy ước chung](README.md)
+[Mục lục module](README.md)
 
-## Hiện trạng
+## 1. Module dùng để làm gì?
 
-`src/modules/notifications/` có controller/service/repository và response types; logic trả 501. NotificationsGateway chỉ là scaffold Hello world, **không phải realtime an toàn**. MVP dùng HTTP + polling, không thêm Socket.IO/broker trong task persistence.
+Lưu thông báo trong PostgreSQL, hiển thị danh sách và đồng bộ số chưa đọc.
+HTTP đọc/ghi trạng thái; Socket.IO báo cho ứng dụng tải lại dữ liệu thật.
+Gửi và chấp nhận lời mời kết bạn tạo thông báo trong cùng transaction. `post_reacted` và
+`post_commented` có loại dữ liệu và hàm nội bộ, nhưng chưa có luồng react/bình
+luận lưu DB để gọi hàm đó.
 
-## API hiện có
+### Kết nối thời gian thực
 
-| API | Hàm | Output |
-| --- | --- | --- |
-| `GET /notifications` | listForUser | Page<NotificationResponseDto> |
-| `GET /notifications/unread-count` | countUnread | `{ unreadCount }` |
-| `PATCH /notifications/read-all` | markAllRead | `{ updatedCount, readThrough }` |
-| `PATCH /notifications/:notificationId/read` | markRead | `{ id, isRead: true, unreadCount }` |
+- Socket.IO v4, transport WebSocket, path `/notifications/socket.io`.
+  Gửi access token trong `auth.accessToken`, không truyền qua query string;
+  origin trình duyệt phải khớp `FRONTEND_URL`.
+- Server tự chọn phòng từ user trong JWT. `notifications:changed` không có
+  payload nhạy cảm; client tải lại số chưa đọc và danh sách qua REST. Khi
+  token hết hạn, socket ngắt; client dùng luồng refresh hiện có để nối lại.
+- Client tải lại khi kết nối, khi quay lại tab, và định kỳ 45 giây khi tab mở
+  nhưng socket mất kết nối. Không phát Web Push khi đóng tab.
+- Reverse proxy cần chuyển tiếp WebSocket Upgrade tại path trên. Phòng hiện
+  nằm trong tiến trình; chạy nhiều instance cần Socket.IO adapter chung để
+  chuyển sự kiện giữa các instance.
 
-Query list: limit/cursor/unreadOnly, mặc định false; giữ parsing rõ `'false'` → false. Response actor là UserSummary hoặc null; type là string để đọc được record legacy. Không public API tạo notification.
+## 2. Trình tự triển khai theo từng API
 
-## Dữ liệu và phụ thuộc
+Các API đều yêu cầu Bearer token. Actor có thể null khi user bị xóa. Target
+được mã hóa vào cột `link` hiện có; link cũ không hợp lệ trả `target: null`.
+Thông báo mới dùng ID cố định theo người nhận, loại và ID sự kiện; khóa chính
+chống tạo trùng khi retry. Không cần migration cho luồng hiện tại.
 
-Schema hiện có recipientId, actorId, type, content, link, isRead, createdAt. `target` và `deduplicationKey` mới có ở types, **chưa có cột DB**. Đề xuất nullable target_type/target_id/deduplication_key và unique theo recipient + key khác null; audit và duyệt migration trước. Legacy không target vẫn đọc được; không đổi isRead thành readAt.
+### API 1 — GET /notifications
 
-Notifications chỉ phụ thuộc Auth/Database, không import Friends/Posts ngược lại. Export NotificationsService, không export repository cho caller viết trực tiếp.
+**Mục đích:** lấy thông báo của chính mình, có phân trang.
 
-## Trình tự triển khai
+**Input — query:**
 
-1. Wire Database và implement NotificationsRepository.create hỗ trợ tx caller, uniqueness/upsert và trả `{ id, created }`.
-2. `create`/`createInTransaction` bỏ self-notification; key ổn định cho retry cùng hành động, key khác cho hành động mới hợp lệ. Content/target do BE tạo, không tin link tùy ý từ client.
-3. List luôn filter recipient, keyset createdAt + id, cursor bind unreadOnly và user; map actor deleted thành null, timestamp ISO.
-4. Count từ DB isRead, không thêm counter RAM hoặc persisted counter dễ lệch.
-5. MarkRead update có điều kiện recipientId; tài nguyên không sở hữu trả 404. Retry không tạo thay đổi thừa.
-6. MarkAllRead chốt readThrough từ DB, UPDATE nguyên tử chỉ unread thuộc user và nằm trong mốc; ghi nhận rõ semantics giao dịch đồng thời. Notification mới sau mốc vẫn unread; test timestamp của transaction cạnh tranh, không mặc định timestamp tương đương thứ tự commit.
-7. Friends gọi createInTransaction trong cùng transaction quan hệ. Không gọi mạng/provider trong transaction; nếu thêm realtime sau, emit chỉ sau commit.
+```json
+{ "limit": 10, "cursor": null, "unreadOnly": false }
+```
 
-Count là snapshot tại lúc đọc, FE phải resync định kỳ. Polling FE đề xuất 30–60 giây khi tab hoạt động; ngừng khi logout và refresh khi focus, chưa phải code BE đã triển khai.
+Query truyền qua URL; bỏ cursor ở trang đầu. Limit tối đa 50.
 
-## Kiểm thử nghiệm thu
+**Output — HTTP `200 OK`:**
 
-Self suppression, duplicate key đồng thời, action mới có key mới, rollback với friend action, owner/nonowner, legacy actor/target, unreadOnly=false, retry mark-read, read-all cạnh tranh create và pagination. Unique/upsert/rollback cần DB integration, không chỉ mock.
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "<notification-uuid>",
+        "type": "friend_request_received",
+        "actor": { "id": "<user-uuid>", "username": "an", "fullName": "Nguyễn An", "avatarUrl": null },
+        "content": "Nguyễn An đã gửi lời mời kết bạn.",
+        "target": { "type": "friend_request", "id": "<request-uuid>" },
+        "isRead": false,
+        "createdAt": "2026-11-11T08:00:00.000Z"
+      }
+    ],
+    "nextCursor": null,
+    "hasMore": false
+  }
+}
+```
+
+- [ ] Controller
+  - [ ] Validate query; parse chuỗi `'false'` thành false, không dùng Boolean('false').
+- [ ] Service/database
+  - [ ] `listForUser()` luôn filter recipient từ JWT.
+  - [ ] Keyset createdAt + id, cursor bind user/unreadOnly; map actor/target legacy an toàn.
+  - [ ] Chỉ trả DTO allowlist, không lộ dữ liệu riêng của actor.
+- [ ] FE và kiểm thử
+  - Dùng Socket.IO để đồng bộ; polling chỉ là dự phòng khi mất kết nối.
+  - [ ] Test ownership, legacy, unreadOnly=false và pagination; target mất quyền phải xử lý an toàn khi mở.
+
+### API 2 — GET /notifications/unread-count
+
+**Input:** Bearer token, không body.
+
+**Output — HTTP `200 OK`:**
+
+```json
+{ "success": true, "data": { "unreadCount": 3 } }
+```
+
+- [ ] Controller/service
+  - [ ] Gọi `countUnread()` cho user hiện tại.
+  - [ ] Đếm trực tiếp DB theo recipient/isRead, không dùng counter RAM dễ lệch.
+- [ ] FE và kiểm thử
+  - [ ] Badge resync cùng danh sách; count chỉ là snapshot lúc truy vấn.
+  - [ ] Test count rỗng và không tính thông báo người khác.
+
+### API 3 — PATCH /notifications/:notificationId/read
+
+**Input:** notificationId UUID trên path, không body.
+
+**Output — HTTP `200 OK`:**
+
+```json
+{ "success": true, "data": { "id": "<notification-uuid>", "isRead": true, "unreadCount": 2 } }
+```
+
+- [ ] Controller/service
+  - [ ] Validate ID, gọi `markRead()` với user từ JWT.
+  - [ ] UPDATE có điều kiện recipient; không sở hữu/missing trả 404.
+  - [ ] Gọi lặp không giảm count hai lần; trả count được tính lại.
+- [ ] FE và kiểm thử
+  - [ ] Đồng bộ item và badge; test owner/nonowner/missing/retry.
+
+### API 4 — PATCH /notifications/read-all
+
+**Input:** Bearer token, không body. Giữ route cố định trước route có ID.
+
+**Output — HTTP `200 OK`:**
+
+```json
+{ "success": true, "data": { "updatedCount": 3, "readThrough": "2026-11-11T08:05:00.000Z" } }
+```
+
+- [ ] Controller/service
+  - [ ] Gọi `markAllRead()`, chốt readThrough từ DB.
+  - [ ] UPDATE nguyên tử unread của user tới mốc; thông báo mới sau mốc vẫn unread.
+  - [ ] Chốt/test semantics transaction đồng thời; timestamp không tự là thứ tự commit.
+- [ ] FE và kiểm thử
+  - [ ] Resync list/count, không mặc định count luôn bằng 0 khi có thông báo mới.
+  - [ ] Test gọi lặp và create cạnh tranh read-all trên DB cô lập.
+
+## 3. Hàm nội bộ — Tạo thông báo
+
+Không mở API tạo notification public.
+
+- [ ] Implement `create()`/`createInTransaction()` với caller transaction.
+  - [ ] Recipient/actor/content/target do BE xác định; bỏ self-notification.
+  - Dùng khóa chính xác định theo recipient + type + action ID; retry cùng
+    hành động không trùng, hành động mới có ID mới.
+  - [ ] Friends gọi service export trong cùng transaction quan hệ; không gọi mạng trong transaction.
+- [ ] Test uniqueness/upsert và rollback cùng friend action trên DB, không chỉ mock.
+
+## 4. Nghiệm thu
+
+- [ ] Lời mời tạo thông báo thật; đọc cập nhật badge, reload không mất dữ liệu.
+- [ ] Hoàn tất [checklist chung](README.md#checklist-hoàn-tất-mỗi-module); chưa bật realtime ngoài scope.

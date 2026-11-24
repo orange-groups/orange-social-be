@@ -1,26 +1,60 @@
-# Users — tìm kiếm người dùng
+# Guide triển khai Users
 
-[Mục lục và quy ước chung](README.md)
+[Mục lục module](README.md)
 
-## Hiện trạng và contract
+## 1. Module dùng để làm gì?
 
-`src/modules/users/` có UsersController.search → UsersService.searchUsers, SearchUsersDto và UserSearchResponseDto. Service chưa triển khai. Module đã import Auth/Friends, cần wire DB khi viết query.
+Tìm người dùng để xem hồ sơ hoặc kết bạn. Thanh tìm kiếm dẫn tới
+`/search?q=...` và gọi `GET /users`. Không tìm bằng email.
 
-`GET /users?q=nguyen&limit=10&cursor=...` yêu cầu Bearer, trả `Page<UserSearchResponseDto>`. Item là UserSummary + relationship; không dùng AuthUserDto vì có email.
+## 2. Trình tự triển khai theo API
 
-## Trình tự triển khai
+### API 1 — GET /users
 
-1. Normalize q bằng trim rồi kiểm tra 2–100 ký tự; thiếu/rỗng trả 400, không biến API thành list mọi tài khoản.
-2. Tìm không phân biệt hoa thường trên fullName/username bằng query parameterized; nếu semantics là tìm literal thì escape `%`, `_` và escape character của ILIKE. Không tìm email công khai.
-3. Bỏ users soft-delete; chốt có loại chính viewer khỏi kết quả hay không trước nghiệm thu.
-4. Keyset createdAt DESC + id DESC, lấy limit+1; cursor bind q đã normalize và ngữ cảnh viewer khi cần. Cursor filter khác trả 400.
-5. Gọi FriendsService.getRelationships một batch cho các IDs trong trang; không query relationship từng user.
-6. Map allowlist id/username/fullName/avatarUrl/relationship. Chỉ thêm repository nếu query đủ phức tạp, không tạo layer rỗng.
+**Mục đích:** tìm theo fullName/username, trả kèm quan hệ với người đang xem.
+Yêu cầu Bearer token.
 
-## Dữ liệu/cấu hình
+**Input — query:**
 
-Dùng users và friendship/request hiện có. Không cần provider ngoài hay env riêng. Xem query plan trước khi đề xuất search index/extension; thêm index là migration cần review, không tự cài extension DB.
+```json
+{ "q": "nguyen", "limit": 10, "cursor": null }
+```
 
-## Kiểm thử nghiệm thu
+Query truyền qua URL; bỏ cursor khi lấy trang đầu. `q` được trim, có thể bỏ
+`@` ở đầu và dài 2–100 ký tự. `limit` mặc định 10, tối đa 50.
 
-q thiếu/trắng/ngắn/dài, Unicode và case-insensitive; wildcard/literal và SQL injection; không trả email/ngày sinh/hash/deleted user. Kiểm tra cả năm trạng thái relationship, không N+1, thứ tự khi timestamp trùng và cursor khác q/viewer theo contract đã chốt.
+**Output — HTTP `200 OK`:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "<user-uuid>",
+        "username": "nguyenan",
+        "fullName": "Nguyễn An",
+        "avatarUrl": null,
+        "relationship": { "status": "none", "requestId": null }
+      }
+    ],
+    "nextCursor": null,
+    "hasMore": false
+  }
+}
+```
+
+- Tìm chuỗi con bằng `strpos(lower(cột), lower(q))`: không phân biệt hoa
+  thường, giữ nguyên dấu tiếng Việt, không có fuzzy matching hay xếp hạng.
+  `%` và `_` là ký tự thường. SQL truyền từ khóa qua tham số.
+- Loại tài khoản của người tìm và tài khoản đã xóa mềm. Chỉ trả thông tin
+  công khai và quan hệ, không trả email, ngày sinh hoặc hash.
+- Phân trang ổn định theo UUID tăng dần; lấy `limit + 1` để xác định
+  `hasMore`. Cursor gắn với truy vấn và người tìm. Quan hệ được đọc theo batch.
+- FE chỉ tìm khi submit, hủy request cũ khi đổi truy vấn và có nút
+  **Xem thêm người dùng**. Bấm kết quả để mở `/profile/:userId`.
+
+## 3. Nghiệm thu
+
+- [ ] Tìm được user thật và nút quan hệ đúng hai chiều.
+- [ ] Hoàn tất [checklist chung](README.md#checklist-hoàn-tất-mỗi-module), ghi kết quả và giới hạn chưa triển khai.

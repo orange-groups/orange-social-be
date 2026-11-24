@@ -1,33 +1,75 @@
-# Mail — tích hợp Resend có kiểm soát
+# Guide triển khai Mail
 
-[Mục lục và quy ước chung](README.md)
+[Mục lục module](README.md) · [Auth](auth.md)
 
-## Hiện trạng và scope
+## 1. Module dùng để làm gì?
 
-`src/modules/mail/` có MailModule/MailService và types, chỉ throw NotImplementedException. Chưa cài `resend`; AuthModule chưa import MailModule. Recovery hiện vẫn gửi SMTP qua Nodemailer, không thay bằng placeholder.
+Dựng và gửi email qua Resend cho module khác. Auth vẫn sở hữu token, cooldown
+và thu hồi session. **Không có API gửi email public.** `MailService` gửi email
+đặt lại mật khẩu bằng HTTPS, không phụ thuộc SMTP hay SDK bổ sung.
 
-Không có controller hoặc API gửi email tùy ý. Auth sở hữu token/cooldown/TTL/revoke session; Mail chỉ giao nhận email.
+Backend đọc `RESEND_API_KEY` (quyền **Sending access**) và `MAIL_FROM`. Sender
+test `onboarding@resend.dev` chỉ dùng cho tài khoản Resend của bạn và các địa
+chỉ giả lập của Resend. Để gửi cho người dùng thật, xác minh domain và chọn
+sender trên domain đó. Không đưa API key vào frontend hoặc git.
 
-## Contract nội bộ
+## 2. Trình tự triển khai theo hàm nội bộ
 
-- `sendPasswordReset({ to, resetUrl, requestId })` → `{ providerMessageId }`.
-- `sendTransactionalEmail(input)` private: to/subject/text/html tùy chọn/idempotencyKey.
-- Không xuất providerMessageId/reset token qua response auth.
+### Hàm 1 — sendPasswordReset(input)
 
-## Cấu hình dự kiến
+**Mục đích:** dựng email reset từ link do Auth tạo.
 
-Sau khi duyệt package và provider, cấu hình RESEND_API_KEY, MAIL_FROM và FRONTEND_URL trên BE. Người gửi/domain phải được Resend cho phép; tài khoản thử nghiệm có thể giới hạn người nhận. Không đưa secret vào FE hoặc Markdown. Giữ config Redis recovery hiện tại.
+**Input nội bộ:**
 
-## Trình tự triển khai
+```json
+{ "to": "an@example.com", "resetUrl": "https://frontend.example/reset-password?token=<token>", "requestId": "<stable-request-id>" }
+```
 
-1. Cài SDK sau duyệt, wire config và client; thiếu cấu hình xử lý thành lỗi khả dụng, không fake success.
-2. Dựng template nội bộ text/HTML; escape dữ liệu chèn vào HTML và validate reset URL do auth dựng từ FRONTEND_URL.
-3. Gửi với timeout; kiểm tra cả rejected promise và error trong response SDK. Retry nếu có phải dùng idempotency key ổn định cho cùng lần gửi, không tự gửi trùng.
-4. Sau khi Mail có logic/test thật, AuthModule import MailModule và inject vào PasswordRecoveryService thay transport Nodemailer.
-5. Giữ token ngẫu nhiên/digest/Redis TTL 15 phút, cooldown và reset-session revocation. Khi gửi thất bại thu hồi token vừa cấp.
-6. Giữ phản hồi chung cho email có/không tồn tại, bao gồm lỗi gửi riêng theo địa chỉ. Hiện auth có test SMTP failure trả 503: đánh giá thay đổi chống enumeration rõ ràng, cập nhật test/contract có chủ đích, không ghi là hành vi đã có.
-7. Chỉ gỡ Nodemailer/config SMTP sau khi tìm hết consumers và regression pass; không thay cookie/JWT trong task mail.
+**Output nội bộ, không phải HTTP response:**
 
-## Kiểm thử nghiệm thu
+```json
+{ "providerMessageId": "<provider-message-id>" }
+```
 
-Mock SDK success/error response/exception/timeout, escape HTML, key ổn định, không log link/token/email credentials. Auth regression cho known/unknown email, token cleanup, token hết hạn/dùng lại và revoke session. Test domain gửi sandbox riêng, không gửi mail thật trong unit tests.
+- [ ] MailService
+  - [x] Auth dựng reset URL từ FRONTEND_URL tin cậy; MailService dựng email plain text.
+  - [ ] Tạo idempotency key ổn định từ requestId cho cùng lần gửi, chuyển cho hàm private.
+  - [ ] Không log recipient/link/token và không trả provider ID qua API auth.
+- [ ] Kiểm thử
+  - [ ] Test template/escaping, URL sai, requestId ổn định và provider error; mock provider, không gửi mail thật.
+
+### Hàm 2 — sendTransactionalEmail(input), private
+
+**Input nội bộ:**
+
+```json
+{ "to": "an@example.com", "subject": "Đặt lại mật khẩu", "text": "<template-generated-text>", "html": "<template-generated-html>", "idempotencyKey": "<stable-key>" }
+```
+
+**Output nội bộ:**
+
+```json
+{ "providerMessageId": "<provider-message-id>" }
+```
+
+- [ ] Provider
+  - [x] Gọi Resend Email API bằng HTTPS, đọc RESEND_API_KEY/MAIL_FROM từ BE.
+  - [ ] Thiếu config trả lỗi khả dụng, không fake success; không đưa secrets vào FE.
+  - [x] Gửi với timeout, kiểm tra lỗi mạng, HTTP và response thiếu ID.
+  - [ ] Retry chỉ khi có chính sách/idempotency rõ ràng, không gửi trùng.
+- [ ] Kiểm thử
+  - [ ] Mock success/error/timeout, idempotency và không lộ provider payload/secret qua API.
+
+## 3. Nối vào API Auth hiện có
+
+- [x] AuthModule import MailModule; PasswordRecoveryService gọi MailService.
+  - [ ] Giữ route/DTO/output JSON ở [Auth API 6–7](auth.md); không thêm `/send-email`.
+  - [ ] Giữ random token/digest/Redis TTL 15 phút/cooldown/revoke session; gửi lỗi thu hồi token vừa tạo.
+  - [x] Trả cùng thông báo với địa chỉ không tồn tại khi Resend từ chối gửi; thu hồi token vừa tạo.
+  - [x] Gỡ Nodemailer và cấu hình SMTP mẫu; không đổi JWT/cookie.
+
+## 4. Nghiệm thu
+
+- [ ] Auth regression token expired/reused/cleanup/revocation và provider failure pass.
+- [ ] Gửi sandbox được phép, dùng link đổi được mật khẩu; unit test không gửi live email.
+- [ ] Hoàn tất [checklist chung](README.md#checklist-hoàn-tất-mỗi-module), ghi provider còn dùng và phần chưa triển khai.

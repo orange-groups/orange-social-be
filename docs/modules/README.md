@@ -1,4 +1,16 @@
-# Hướng dẫn triển khai từng module BE
+# Checklist triển khai từng module BE
+
+## Cách sử dụng checklist
+
+- `[ ]`: việc chưa nghiệm thu; không có nghĩa code hoàn toàn chưa tồn tại.
+- `[x]`: chỉ đánh dấu sau khi đối chiếu code, chạy kiểm tra và ghi bằng chứng.
+- Mỗi guide bắt đầu bằng giới thiệu ngắn, sau đó triển khai theo từng API: mục đích → input → output JSON → checklist con controller/service/database/FE/kiểm thử.
+- Không thêm bảng thành phần, danh sách file hoặc phần chuẩn bị dài nếu không cần. Đặt ràng buộc cần thiết ngay trong API liên quan.
+- Mail mô tả hàm nội bộ, không tạo API gửi email public. Chat tách REST và socket; HTTP interceptor không tự bọc socket ack.
+- JSON là ví dụ minh họa, không phải dữ liệu thật; `<...>` là placeholder phải thay bằng UUID/token/cursor hợp lệ khi thử. Query JSON chỉ mô tả các tham số URL, không phải GET body.
+- API còn 501 chỉ có contract khung; output success là mục tiêu triển khai. Comments/Reactions/Chat chưa chốt contract phải ghi rõ đề xuất và duyệt trước khi viết code.
+- Bảng API, hiện trạng và ràng buộc giữ vai trò tham chiếu; không tự coi một route/DTO khung là chức năng đã xong.
+- Khi hoàn tất, ghi người thực hiện, commit, lệnh/kết quả kiểm tra và giới hạn còn lại ngay dưới checklist module.
 
 Tài liệu bàn giao để triển khai nghiệp vụ, **không phải xác nhận các tính năng đã chạy** và không phải hướng dẫn chỉ deploy hosting. Đối chiếu mã nguồn trước mỗi task.
 
@@ -8,7 +20,7 @@ Tài liệu bàn giao để triển khai nghiệp vụ, **không phải xác nh�
 
 | Module | Hiện trạng | Hướng dẫn |
 | --- | --- | --- |
-| Auth | Có nghiệp vụ đăng ký/session/recovery SMTP | [auth.md](auth.md) |
+| Auth | Có nghiệp vụ đăng ký/session/recovery qua Resend | [auth.md](auth.md) |
 | Media | API, adapter và repository khung; chưa có SDK Cloudinary | [media.md](media.md) |
 | Profile | API/DTO khung, service trả 501 | [profile.md](profile.md) |
 | Notifications | API/repository khung; gateway mẫu chưa bảo mật | [notifications.md](notifications.md) |
@@ -16,7 +28,7 @@ Tài liệu bàn giao để triển khai nghiệp vụ, **không phải xác nh�
 | Users | API tìm kiếm khung | [users.md](users.md) |
 | Posts | API/repository/visibility khung | [posts.md](posts.md) |
 | Feed | API và contract provider khung, chưa có provider thật | [feed.md](feed.md) |
-| Mail | Provider Resend khung, chưa nối auth | [mail.md](mail.md) |
+| Mail | Resend Email API, đã nối khôi phục mật khẩu | [mail.md](mail.md) |
 | Comments | Controller/service rỗng, chưa có endpoint | [comments.md](comments.md) |
 | Reactions | Controller/service rỗng, chưa có endpoint | [reactions.md](reactions.md) |
 | Chat | Controller/service rỗng, gateway Hello world | [chat.md](chat.md) |
@@ -34,16 +46,16 @@ Các module skeleton có route hợp lệ hiện trả **501**, không phải d�
 - Service sở hữu quy tắc/quyền/transaction, repository sở hữu SQL. Gọi service export của module khác, không truy cập repository nội bộ của nhau.
 - Chỉ inject dependency khi triển khai thật; bỏ/narrow ESLint allowance `_parameter` tại các hàm đã dùng tham số.
 
-## Thứ tự đề xuất
+## Checklist thứ tự triển khai
 
-1. Xác nhận DB thật và quy trình migration; duyệt các thay đổi cần thiết.
-2. Cursor helpers và notifications persistence.
-3. Friends → users → profile text; posts và visibility có thể làm riêng.
-4. Media + avatar profile sau khi duyệt schema/preset/SDK.
-5. Feed latest rồi tích hợp recommendation thật; mail khi được duyệt chuyển provider.
-6. Comments/reactions/chat chỉ bắt đầu sau khi chốt contract tương ứng.
+- [ ] Chốt module được phép làm, DB thật, quy trình migration và các thay đổi cần duyệt.
+- [ ] Hoàn thành cursor helpers và notifications persistence.
+- [ ] Hoàn thành friends → users → profile text; posts và visibility có thể triển khai độc lập.
+- [ ] Hoàn thành media + avatar profile sau khi duyệt schema/preset/SDK.
+- [ ] Hoàn thành feed latest rồi tích hợp recommendation thật; chuyển provider mail chỉ khi được duyệt.
+- [ ] Chốt contract riêng trước khi bắt đầu comments/reactions/chat.
 
-Phụ thuộc mục tiêu: Friends → Notifications; Users → Friends; Profile → Friends + Media; Feed → Posts. Auth hiện **không** phụ thuộc MailModule. Khi tích hợp mail, rà soát graph để không tạo vòng import.
+Phụ thuộc module: Friends → Notifications; Users → Friends; Profile → Friends + Media; Feed → Posts; Auth → Mail.
 
 ## Cổng duyệt DB và cấu hình
 
