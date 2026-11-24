@@ -1,5 +1,8 @@
 export type NotificationType =
-  'friend_request_received' | 'friend_request_accepted';
+  | 'friend_request_received'
+  | 'friend_request_accepted'
+  | 'post_reacted'
+  | 'post_commented';
 
 export interface NotificationTarget {
   type: 'friend_request' | 'user' | 'post';
